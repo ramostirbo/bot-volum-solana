@@ -1,114 +1,62 @@
-## PumpFun AMM Bundler & Volume Maker
+# 🚀 Solana Volume Maker Bot v2.0 (Arabic Guide)
 
-Automates bundled token trading on Solana for PumpFun/Raydium using Jito for first-block execution. Designed to create liquidity, distribute SOL across multiple wallets, simulate organic volume via randomized buy/sell cycles, and gather funds back reliably.
+هذا البوت مصمم لزيادة حجم التداول (Volume) لعملات Solana على منصات Raydium و Jupiter باستخدام إستراتيجية توزيع المحافظ والعمليات المتسلسلة.
 
-[![Node](https://img.shields.io/badge/Node-16%2B-5FA04E?logo=node.js&logoColor=white)](#)
-[![Solana](https://img.shields.io/badge/Solana-Mainnet-14F195?logo=solana&logoColor=white)](#)
-[![Telegram](https://img.shields.io/badge/Telegram-@lorine93s-26A5E4?style=for-the-badge&logo=telegram&logoColor=white)](https://t.me/lorine93s)
+---
 
-### Key Features
-- **Jito bundling**: First-block inclusion (when enabled) for fast, reliable execution
-- **Volume simulation**: Randomized buy/sell intervals and amounts to mimic organic flow
-- **Multi-wallet orchestration**: Distributes SOL to N sub-wallets and gathers profits back
-- **Raydium/PumpFun support**: Uses Raydium SDK and Jupiter routes to swap
-- **Config via .env**: Tune timing, slippage, fees, wallet counts, and token mint
-- **Resilience**: Retries on failures and cleans up sub-wallet balances
+## 🛠️ المهام الأساسية للبوت (بالترتيب)
 
-### How It Works
-1) Distribute SOL from the main wallet to `DISTRIBUTE_WALLET_NUM` temporary wallets
-2) Each wallet executes buy twice (split amounts), waits randomized intervals, then sells
-3) Close token accounts and transfer remaining SOL back to the main wallet
-4) Repeat after a randomized round interval
+يقوم البوت بتنفيذ المهام التالية في كل دورة تشغيل:
 
-### Project Structure
-```
-pumpfun-amm-bundler-volume-maker/
-  ├─ index.js                # main loop: distribute, buy/sell, gather
-  ├─ gather.js               # utility to gather SOL from wallets
-  ├─ constants/              # environment-driven runtime config
-  ├─ utils/                  # Jupiter swap builders, file utils, helpers
-  ├─ executor/               # legacy/jito transaction executors
-  ├─ package.json            # scripts: start, gather
-  └─ README.md
-```
+### 1. **تحليل المحفظة والإعداد (Initialization)**
+   - قراءة الإعدادات من ملف `.env`.
+   - التأكد من رصيد المحفظة الأساسية وكفايتها للتوزيع.
+   - عرض واجهة مستخدم احترافية توضح حالة البوت والإعدادات الحالية.
 
-## Getting Started
+### 2. **توزيع الرصيد (SOL Distribution)**
+   - إنشاء محافظ فرعية جديدة (حسب العدد المحدد في `DISTRIBUTE_WALLET_NUM`).
+   - تحويل مبالغ عشوائية من الـ SOL من المحفظة الأساسية إلى هذه المحافظ.
+   - يتم التوزيع بنسب متفاوتة (+/- 10%) لمحاكاة التداول الطبيعي.
 
-### Prerequisites
-- Node.js 16+
-- A funded Solana keypair (base58 private key)
-- RPC endpoint and (optional) Jito bundle relayer access
+### 3. **تنفيذ عمليات الشراء (Sequential Buying)**
+   - لكل محفظة فرعية، يتم تنفيذ عمليتي شراء (Buy 1 & Buy 2).
+   - يتم حساب كمية الشراء بناءً على النسبة المحددة في `.env` (مثلاً 20% إلى 40% من رصيد المحفظة).
+   - توجد فواصل زمنية عشوائية بين عمليات الشراء لزيادة التمويه.
 
-### Install
-```bash
-npm install
-# or
-yarn install
-```
+### 4. **تنفيذ عمليات البيع (Sequential Selling)**
+   - بعد فترة انتظار محددة، يقوم البوت ببيع كامل كمية التوكنات الموجودة في كل محفظة فرعية.
+   - يتم البيع عبر Jupiter لضمان أفضل سعر وأقل انزلاق (Slippage).
 
-### Configuration (.env)
-Create a `.env` in the project root:
-```ini
-# Wallet and network
-PRIVATE_KEY=base58_private_key_here
-RPC_ENDPOINT=https://your-rpc
-RPC_WEBSOCKET_ENDPOINT=wss://your-rpc-ws
+### 5. **جمع الأرصدة وإغلاق الحسابات (Gathering & Closing)**
+   - هذه أهم مرحلة للحفاظ على الرصيد:
+   - يتم تحويل الـ SOL المتبقي من المحافظ الفرعية إلى المحفظة الأساسية.
+   - يتم إغلاق حسابات التوكن (ATA) لاسترداد رسوم الـ Rent (الـ SOL المحجوز).
+   - حذف بيانات المحافظ المكتملة من ملف `data.json`.
 
-# Token and trading params
-TOKEN_MINT=So11111111111111111111111111111111111111112
-SLIPPAGE=1                 # %
-JITO_MODE=false            # true to enable Jito
-JITO_FEE=0                 # lamports or relayer-specific
+---
 
-# Distribution and volume shaping
-DISTRIBUTE_WALLET_NUM=10
-SOL_AMOUNT_TO_DISTRIBUTE=1.0     # total SOL to distribute each round
-DISTRIBUTE_INTERVAL_MIN=60       # seconds
-DISTRIBUTE_INTERVAL_MAX=120
+## 📂 الملفات والأدوات الإضافية
 
-BUY_LOWER_PERCENT=5              # % of wallet SOL (excluding reserve)
-BUY_UPPER_PERCENT=15
-BUY_INTERVAL_MIN=5               # seconds
-BUY_INTERVAL_MAX=15
-SELL_INTERVAL_MIN=30             # seconds
-SELL_INTERVAL_MAX=90
-```
+### 🔎 `check-wallet.js` (فحص المحفظة)
+- أداة سريعة لفحص رصيد المحفظة الأساسية والتوكنات الموجودة فيها بشكل منظم وأنيق.
 
-Notes:
-- `PRIVATE_KEY` is base58 of the main wallet (will fund sub-wallets).
-- `TOKEN_MINT` is the token to trade (base58).
-- When `JITO_MODE=true`, transactions are submitted via the Jito executor.
+### 🔄 `gather-all.js` (استعادة الطوارئ)
+- سكربت مخصص لاستعادة جميع الأموال من المحافظ الفرعية في حال توقف البوت أو الرغبة في إنهاء العمل، حيث يقوم بجمع كل الـ SOL المتبقي وإغلاق كافة الحسابات المفتوحة.
 
-### Run
-```bash
-# Start the bundler/volume bot
-npm run start
-# or
-yarn start
-```
+---
 
-You should see logs showing:
-- Main wallet address and SOL balance
-- Token mint
-- Configured buy/sell intervals
-- Distribution results, swap tx links, and gather steps
+## ⚙️ إعدادات الإستراتيجية الناجحة (`.env`)
 
-Optional utility:
-```bash
-# Run standalone gather (if provided) to sweep SOL from sub-wallets
-npm run gather
-# or
-yarn gather
-```
+لضمان عمل البوت بأفضل كفاءة، تم ضبط الإستراتيجية كالتالي:
+- **عدد المحافظ:** 10 محافظ (لزيادة النشاط).
+- **نسبة الشراء:** 20% - 40% (للحفاظ على سيولة المحافظ).
+- **التوقيت:** فواصل زمنية بين 60 إلى 120 ثانية بين الجولات.
+- **الانزلاق (Slippage):** 15% (متوازن لضمان تنفيذ العمليات).
 
-## Troubleshooting
-- Missing env var: the bot will print which variable is not set and exit
-- Low SOL: ensure the main wallet has enough SOL for distribution and fees
-- Slippage: increase `SLIPPAGE` if swaps are failing due to price movement
-- RPC instability: try a more reliable RPC or reduce concurrency
+---
 
-## Safety and Responsibility
-Use at your own risk; on-chain trading is volatile. Fund the main wallet carefully and start with small amounts. Ensure RPC endpoints and (optional) Jito access are stable. Comply with local laws and exchange/AMM policies.
+## 🚀 كيفية التشغيل
 
-## Contact
-[![Telegram](https://img.shields.io/badge/Telegram-@lorine93s-26A5E4?style=for-the-badge&logo=telegram&logoColor=white)](https://t.me/lorine93s)
+1. **تشغيل البوت:** `bun index.js`
+2. **فحص المحفظة:** `bun check-wallet.js`
+3. **استعادة جميع الأموال:** `bun gather-all.js`
