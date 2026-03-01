@@ -20,7 +20,7 @@ const colors = {
 
 async function gatherAll() {
     console.log(`\n${colors.fg.cyan}${colors.bright}==================================================${colors.reset}`);
-    console.log(`${colors.fg.cyan}${colors.bright}          SOLANA FUNDS RECOVERY TOOL v1.0         ${colors.reset}`);
+    console.log(`${colors.fg.cyan}${colors.bright}          SOLANA FUNDS RECOVERY TOOL v1.1         ${colors.reset}`);
     console.log(`${colors.fg.cyan}${colors.bright}==================================================${colors.reset}\n`);
 
     const rpcEndpoint = process.env.RPC_ENDPOINT;
@@ -95,24 +95,20 @@ async function gatherAll() {
 
             tx.recentBlockhash = (await connection.getLatestBlockhash()).blockhash;
             tx.feePayer = subKp.publicKey;
-            tx.sign(subKp);
+            tx.recentBlockhash ? tx.sign(subKp) : null;
 
-            const sig = await connection.sendRawTransaction(tx.serialize(), { skipPreflight: true });
-            process.stdout.write(` -> ${colors.fg.green}✅ Success! ${colors.fg.dim}(${sig.slice(0,8)}...)${colors.reset}\n`);
+            if (tx.signatures.length > 0) {
+                const sig = await connection.sendRawTransaction(tx.serialize(), { skipPreflight: true });
+                process.stdout.write(` -> ${colors.fg.green}✅ Success! ${colors.fg.dim}(${sig.slice(0,8)}...)${colors.reset}\n`);
+            }
 
         } catch (error) {
             process.stdout.write(` -> ${colors.fg.red}❌ Error: ${error.message.slice(0,30)}...${colors.reset}\n`);
         }
     }
 
-    // Clean up data.json after recovery
-    try {
-        fs.writeFileSync("data.json", JSON.stringify([], null, 2));
-        console.log(`\n${colors.fg.green}✨ Recovery complete! data.json has been cleared.${colors.reset}`);
-    } catch (e) {
-        console.log(`\n${colors.fg.red}❌ Failed to clear data.json${colors.reset}`);
-    }
-
+    // UPDATED: DO NOT CLEAR data.json. Keep wallets for reuse.
+    console.log(`\n${colors.fg.green}✨ Recovery complete! Wallets have been kept in data.json for reuse.${colors.reset}`);
     console.log(`\n${colors.fg.cyan}${colors.bright}==================================================${colors.reset}\n`);
 }
 
