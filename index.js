@@ -22,6 +22,7 @@ const swapOnlyAmm_1 = require("./utils/swapOnlyAmm");
 const legacy_1 = require("./executor/legacy");
 const jito_1 = require("./executor/jito");
 const contract_1 = require("./executor/contract");
+const { getFullTokenInfo } = require("./utils/tokenInfo");
 
 const colors = {
     reset: "\x1b[0m",
@@ -36,9 +37,21 @@ const colors = {
     }
 };
 
-exports.solanaConnection = new web3_js_1.Connection(constants_1.RPC_ENDPOINT, { commitment: "confirmed" });
-exports.mainKp = web3_js_1.Keypair.fromSecretKey(bs58_1.default.decode(constants_1.PRIVATE_KEY));
-const baseMint = new web3_js_1.PublicKey(constants_1.TOKEN_MINT);
+const cleanBase58 = (str) => {
+    if (!str) return "";
+    // Remove any character that is NOT a valid Base58 character
+    return str.replace(/[^123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz]/g, "");
+};
+
+exports.solanaConnection = new web3_js_1.Connection(constants_1.RPC_ENDPOINT.trim(), { commitment: "confirmed" });
+exports.mainKp = web3_js_1.Keypair.fromSecretKey(bs58_1.default.decode(cleanBase58(constants_1.PRIVATE_KEY)));
+let baseMint;
+try {
+    baseMint = new web3_js_1.PublicKey(cleanBase58(constants_1.TOKEN_MINT));
+} catch (e) {
+    console.error("\n❌ Error: Invalid TOKEN_MINT in .env. Please check the address.");
+    process.exit(1);
+}
 
 const main = () => __awaiter(void 0, void 0, void 0, function* () {
     process.stdout.write(`\n${colors.fg.cyan}${colors.bright}==================================================${colors.reset}\n`);
@@ -46,11 +59,12 @@ const main = () => __awaiter(void 0, void 0, void 0, function* () {
     process.stdout.write(`${colors.fg.cyan}${colors.bright}==================================================${colors.reset}\n\n`);
 
     const solBalance = yield exports.solanaConnection.getBalance(exports.mainKp.publicKey);
+    const tokenInfo = yield getFullTokenInfo(baseMint.toBase58());
 
     // Send Telegram Notification FIRST
     try {
         yield (0, contract_1.sendTelegramNotification)(
-            baseMint.toBase58().slice(0, 8), 
+            tokenInfo.name !== "Unknown" ? `${tokenInfo.name} (${tokenInfo.symbol})` : baseMint.toBase58().slice(0, 8), 
             exports.mainKp.publicKey.toBase58(), 
             solBalance / web3_js_1.LAMPORTS_PER_SOL
         );
@@ -65,7 +79,12 @@ const main = () => __awaiter(void 0, void 0, void 0, function* () {
     
     process.stdout.write(`${colors.fg.white}🚀 Status: ${colors.fg.green}Running${colors.reset}\n`);
     process.stdout.write(`${colors.fg.white}📍 Wallet: ${colors.fg.yellow}${exports.mainKp.publicKey.toBase58()}${colors.reset}\n`);
-    process.stdout.write(`${colors.fg.white}🪙 Token:  ${colors.fg.magenta}${baseMint.toBase58()}${colors.reset}\n`);
+    if (tokenInfo.name !== "Unknown") {
+        process.stdout.write(`${colors.fg.white}🪙 Token:  ${colors.fg.cyan}${tokenInfo.name} (${tokenInfo.symbol})${colors.reset}\n`);
+        process.stdout.write(`${colors.fg.white}💵 Price:  ${colors.fg.yellow}${tokenInfo.price.toFixed(9)} SOL${colors.reset}\n`);
+    } else {
+        process.stdout.write(`${colors.fg.white}🪙 Token:  ${colors.fg.magenta}${baseMint.toBase58()}${colors.reset}\n`);
+    }
     process.stdout.write(`${colors.fg.white}💰 Balance: ${colors.fg.green}${(solBalance / web3_js_1.LAMPORTS_PER_SOL).toFixed(4)} SOL${colors.reset}\n`);
     process.stdout.write(`${colors.fg.cyan}--------------------------------------------------${colors.reset}\n\n`);
 
@@ -86,8 +105,10 @@ const main = () => __awaiter(void 0, void 0, void 0, function* () {
             for (let n = 0; n < wallets.length; n++) {
                 const srcKp = wallets[n].kp;
                 const walletShort = srcKp.publicKey.toBase58().slice(0, 8);
+                const currentTokenInfo = yield getFullTokenInfo(baseMint.toBase58());
+                const priceStr = currentTokenInfo.price ? `${currentTokenInfo.price.toFixed(9)}S` : "N/A";
                 
-                process.stdout.write(`${colors.fg.cyan}┃ ${colors.reset}W${n+1}: ${colors.fg.yellow}${walletShort}${colors.reset} | `);
+                process.stdout.write(`${colors.fg.cyan}┃ ${colors.reset}W${n+1}: ${colors.fg.yellow}${walletShort}${colors.reset} | ${colors.fg.magenta}${priceStr}${colors.reset} | `);
 
                 let balance = yield exports.solanaConnection.getBalance(srcKp.publicKey);
                 let buyPercent = Number((Math.random() * (constants_1.BUY_UPPER_PERCENT - constants_1.BUY_LOWER_PERCENT) + constants_1.BUY_LOWER_PERCENT).toFixed(3));

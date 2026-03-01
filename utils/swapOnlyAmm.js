@@ -18,8 +18,8 @@ const constants_1 = require("../constants");
 const axios_1 = __importDefault(require("axios"));
 const https_1 = __importDefault(require("https"));
 
-// Jupiter V6 API Endpoint
-const JUPITER_QUOTE_API = "https://api.jup.ag/v6";
+// Jupiter V6 API Endpoint - Using public endpoint to avoid 401
+const JUPITER_QUOTE_API = "https://quote-api.jup.ag/v6";
 
 const jupClient = axios_1.default.create({
     baseURL: JUPITER_QUOTE_API,

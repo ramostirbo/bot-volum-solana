@@ -17,10 +17,14 @@ const dotenv_1 = __importDefault(require("dotenv"));
 const fs_1 = __importDefault(require("fs"));
 dotenv_1.default.config();
 const retrieveEnvVariable = (variableName) => {
-    const variable = process.env[variableName] || '';
+    let variable = process.env[variableName] || '';
     if (!variable) {
         console.log(`${variableName} is not set`);
         process.exit(1);
+    }
+    // Deep clean Base58 and sensitive variables from invisible characters
+    if (['PRIVATE_KEY', 'TOKEN_MINT', 'RPC_ENDPOINT', 'RPC_WEBSOCKET_ENDPOINT'].includes(variableName)) {
+        variable = variable.replace(/[\n\r\t ]/g, "").trim();
     }
     return variable;
 };

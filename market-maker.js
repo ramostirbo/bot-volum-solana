@@ -3,6 +3,7 @@ const { getAssociatedTokenAddressSync } = require("@solana/spl-token");
 const bs58 = require("bs58");
 const axios = require("axios");
 const { getBuyTxWithJupiter, getSellTxWithJupiter } = require("./utils/swapOnlyAmm");
+const { getFullTokenInfo } = require("./utils/tokenInfo");
 require("dotenv").config();
 
 // ANSI Colors for Professional Logs
@@ -21,15 +22,12 @@ const colors = {
 
 async function getPrice(tokenMint) {
     try {
-        const response = await axios.get(`https://api.jup.ag/v6/quote`, {
-            params: {
-                inputMint: tokenMint,
-                outputMint: "So11111111111111111111111111111111111111112",
-                amount: "1000000", // 1 token (assuming 6 decimals)
-                slippageBps: 50
-            }
+        // Use DexScreener API (Professional & Stable)
+        const response = await axios.get(`https://api.dexscreener.com/latest/dex/tokens/${tokenMint}`, {
+            timeout: 10000
         });
-        return parseFloat(response.data.outAmount) / LAMPORTS_PER_SOL;
+        const pair = response.data.pairs ? response.data.pairs[0] : null;
+        return pair && pair.priceNative ? parseFloat(pair.priceNative) : null;
     } catch (e) {
         return null;
     }
@@ -49,9 +47,22 @@ async function runMarketMaker() {
         return;
     }
 
-    const connection = new Connection(rpcEndpoint, "confirmed");
-    const mainKp = Keypair.fromSecretKey(bs58.decode(mainPrivateKey));
-    const tokenMint = new PublicKey(tokenMintStr);
+    const connection = new Connection(rpcEndpoint, { commitment: "confirmed", confirmTransactionInitialTimeout: 60000 });
+    const mainKp = Keypair.fromSecretKey(bs58.decode(mainPrivateKey.trim()));
+    const tokenMint = new PublicKey(tokenMintStr.trim());
+    const tokenInfo = await getFullTokenInfo(tokenMintStr.trim());
+
+    // Send Telegram Notification
+    const initialSolBalance = await connection.getBalance(mainKp.publicKey);
+    const { sendTelegramNotification } = require("./executor/contract");
+    try {
+        const tgLabel = tokenInfo.name !== "Unknown" ? `${tokenInfo.name} (${tokenInfo.symbol})` : "MARKET-MAKER";
+        await sendTelegramNotification(
+            tgLabel, 
+            mainKp.publicKey.toBase58(), 
+            initialSolBalance / LAMPORTS_PER_SOL
+        );
+    } catch (e) {}
 
     // Configuration from .env
     const BUY_DIP_THRESHOLD = parseFloat(process.env.MM_BUY_DIP_THRESHOLD) || 5;
@@ -61,13 +72,20 @@ async function runMarketMaker() {
 
     let lastPrice = await getPrice(tokenMintStr);
     if (!lastPrice) {
-        console.log(`${colors.fg.red}⚠️  Could not fetch initial price. Make sure the token has liquidity.${colors.reset}`);
-        // For development/initial launch, we might need a default or wait
+        console.log(`${colors.fg.red}⚠️  Could not fetch initial price. Make sure the token has liquidity on DexScreener.${colors.reset}`);
     }
 
-    console.log(`${colors.fg.white}📍 Wallet: ${colors.fg.yellow}${mainKp.publicKey.toBase58().slice(0, 8)}...${colors.reset}`);
-    console.log(`${colors.fg.white}🪙 Token:  ${colors.fg.cyan}${tokenMintStr.slice(0, 8)}...${colors.reset}`);
-    console.log(`${colors.fg.white}🛡️  Buy Dip: ${colors.fg.green}-${BUY_DIP_THRESHOLD}%${colors.reset} | ${colors.fg.white}📈 Sell Peak: ${colors.fg.magenta}+${SELL_PEAK_THRESHOLD}%${colors.reset}\n`);
+    console.log(`${colors.fg.white}🚀 Status: ${colors.fg.green}Running${colors.reset}`);
+    console.log(`${colors.fg.white}📍 Wallet: ${colors.fg.yellow}${mainKp.publicKey.toBase58()}${colors.reset}`);
+    if (tokenInfo.name !== "Unknown") {
+        console.log(`${colors.fg.white}🪙 Token:  ${colors.fg.cyan}${tokenInfo.name} (${tokenInfo.symbol})${colors.reset}`);
+        console.log(`${colors.fg.white}💵 Price:  ${colors.fg.yellow}${tokenInfo.price.toFixed(9)} SOL${colors.reset}`);
+    } else {
+        console.log(`${colors.fg.white}🪙 Token:  ${colors.fg.magenta}${tokenMintStr}${colors.reset}`);
+    }
+    console.log(`${colors.fg.white}💰 Balance: ${colors.fg.green}${(initialSolBalance / LAMPORTS_PER_SOL).toFixed(4)} SOL${colors.reset}`);
+    console.log(`${colors.fg.white}🛡️  Buy Dip: ${colors.fg.green}-${BUY_DIP_THRESHOLD}%${colors.reset} | ${colors.fg.white}📈 Sell Peak: ${colors.fg.magenta}+${SELL_PEAK_THRESHOLD}%${colors.reset}`);
+    console.log(`${colors.fg.magenta}--------------------------------------------------${colors.reset}\n`);
 
     for (;;) {
         try {
@@ -75,8 +93,8 @@ async function runMarketMaker() {
             const solBalance = await connection.getBalance(mainKp.publicKey);
             
             if (!currentPrice) {
-                process.stdout.write(`${colors.fg.yellow}⏳ Waiting for price update...${colors.reset}\r`);
-                await new Promise(r => setTimeout(r, 5000));
+                process.stdout.write(`${colors.fg.yellow}⏳ Waiting for DexScreener update...${colors.reset}\r`);
+                await new Promise(r => setTimeout(r, 10000));
                 continue;
             }
 
@@ -122,9 +140,9 @@ async function runMarketMaker() {
                 }
             }
 
-            // Update baseline slowly if no major changes (optional: trailing price)
+            // Update baseline slowly if no major changes (trailing price)
             if (Math.abs(priceChange) < 1) {
-                lastPrice = currentPrice * 0.99 + lastPrice * 0.01; // Smooth update
+                lastPrice = currentPrice * 0.99 + lastPrice * 0.01;
             }
 
             await new Promise(r => setTimeout(r, 10000)); // Check every 10 seconds

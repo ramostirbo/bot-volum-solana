@@ -31,7 +31,6 @@ async function generateSniperWallets() {
 
     try {
         await sendTelegramNotification("SNIPER", tgMessage, 0);
-        console.log("✅ Wallets info sent to Telegram.");
     } catch (e) {
         console.error("❌ Failed to send wallets to Telegram:", e.message);
     }
